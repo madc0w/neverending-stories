@@ -49,8 +49,8 @@ async function generate() {
 				},
 				body: JSON.stringify({
 					prompt,
-					max_tokens: 1400,
-					temperature: 0.87,
+					max_tokens: 4000,
+					temperature: 0.9,
 					top_p: 1,
 					frequency_penalty: 0.4,
 					presence_penalty: 0.38,
@@ -96,6 +96,4 @@ function setRandomVoice(msg) {
 	msg.voice = voice;
 }
 
-function getApiKey() {
-	return 'sk-i02BDid56C2BZL0zjC' + 'WYT3BlbkFJAbhk5Xyh5azd9pEF7xWQ';
-}
+function getApiKey() {}
