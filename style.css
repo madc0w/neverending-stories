@@ -43,3 +43,11 @@ body {
 .button:hover {
 	background-color: #444;
 }
+
+#story-gen-spinner img {
+	height: 80px; 
+}
+
+.hidden {
+	display: none;
+}

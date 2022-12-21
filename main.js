@@ -35,9 +35,11 @@ async function generate() {
 		if (!storyAboutInput.value) {
 			storyAboutInput.value = storyAbout;
 		}
-		const prompt = `generate a happy story about ${name1} and ${name2} ${storyAbout}`;
+		const prompt = `generate a childen's story about ${name1} and ${name2} ${storyAbout}`;
+		document.getElementById('story-gen-button').classList.add('hidden');
+		document.getElementById('story-gen-spinner').classList.remove('hidden');
 		const response = await fetch(
-			'https://api.openai.com/v1/engines/curie-instruct-beta-v2/completions',
+			'https://api.openai.com/v1/engines/text-davinci-003/completions',
 			{
 				method: 'POST',
 				headers: {
@@ -47,7 +49,7 @@ async function generate() {
 				},
 				body: JSON.stringify({
 					prompt,
-					max_tokens: 400,
+					max_tokens: 1400,
 					temperature: 0.87,
 					top_p: 1,
 					frequency_penalty: 0.4,
@@ -56,9 +58,13 @@ async function generate() {
 			}
 		);
 		const result = await response.json();
-		if (result.choices && result.choices.length > 0) {
+		document.getElementById('story-gen-button').classList.remove('hidden');
+		document.getElementById('story-gen-spinner').classList.add('hidden');
+		if (result.choices?.length > 0) {
 			const text = result.choices[0].text;
 			console.log(text);
+			const html = text.replaceAll(/\n/g, '<br/>');
+			document.getElementById('output-container').innerHTML = html;
 
 			const msg = new SpeechSynthesisUtterance(text);
 			setRandomVoice(msg);

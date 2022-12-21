@@ -24,7 +24,12 @@
 				<label for="story-about-input">Story about:</label>
 				<input id="story-about-input" maxlength="80" />
 			</div>
-			<div class="button" onClick="generate()">Tell me a story!</div>
+			<div class="button" id="story-gen-button" onClick="generate()">
+				Tell me a story!
+			</div>
+			<div id="story-gen-spinner" class="hidden">
+				<img src="img/spinner.gif" />
+			</div>
 		</div>
 		<div id="output-container"></div>
 	</body>
