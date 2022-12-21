@@ -1,0 +1,45 @@
+body {
+	font-family: Lato;
+}
+
+#controls-container {
+	width: 200px;
+	background-color: lightgreen;
+	border-radius: 8px;
+	margin: 8px;
+	padding: 18px;
+	margin-left: calc(50vw - 110px);
+}
+
+#controls-container div {
+	margin-bottom: 22px;
+}
+
+.input-field {
+	margin-bottom: 8px;
+}
+
+#header {
+	text-align: center;
+	font-size: 32px;
+	color: #44993d;
+}
+
+.button {
+	border-radius: 8px;
+	border-style: solid;
+	border-width: 2px;
+	border-color: #222;
+	padding: 8px;
+	background-color: #44993d;
+	cursor: pointer;
+	text-align: center;
+	box-shadow: 4px 4px 8px 2px #000c;
+	color: white;
+	font-size: 22px;
+	max-width: 200px;
+}
+
+.button:hover {
+	background-color: #444;
+}

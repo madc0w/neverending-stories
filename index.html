@@ -1,0 +1,31 @@
+<html>
+	<head>
+		<title>Neverending Stories</title>
+		<script type="text/javascript" src="main.js"></script>
+		<link rel="stylesheet" type="text/css" href="style.css" />
+		<link
+			href="https://fonts.googleapis.com/css?family=Lato"
+			rel="stylesheet"
+		/>
+	</head>
+	<body onLoad="onLoad()">
+		<div id="header">Neverending Stories</div>
+		<hr />
+		<div id="controls-container">
+			<div class="input-field">
+				<label for="name1-input">Name 1:</label>
+				<input id="name1-input" maxlength="20" />
+			</div>
+			<div class="input-field">
+				<label for="name2-input">Name 2:</label>
+				<input id="name2-input" maxlength="20" />
+			</div>
+			<div class="input-field">
+				<label for="story-about-input">Story about:</label>
+				<input id="story-about-input" maxlength="80" />
+			</div>
+			<div class="button" onClick="generate()">Tell me a story!</div>
+		</div>
+		<div id="output-container"></div>
+	</body>
+</html>
