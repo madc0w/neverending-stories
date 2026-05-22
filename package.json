@@ -2,10 +2,15 @@
 	"name": "neverending-stories",
 	"private": true,
 	"type": "module",
+	"engines": {
+		"node": "20.x"
+	},
 	"scripts": {
 		"dev": "nuxt dev",
 		"build": "nuxt build",
+		"start": "node .output/server/index.mjs",
 		"preview": "nuxt preview",
+		"heroku-postbuild": "npm run build",
 		"postinstall": "nuxt prepare"
 	},
 	"dependencies": {
