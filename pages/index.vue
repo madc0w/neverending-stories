@@ -76,14 +76,21 @@
 									<button
 										v-if="
 											entry.kind === 'narration' &&
-											index === latestNarrationIndex &&
-											isSpeechSupported
+											index === latestNarrationIndex
 										"
 										class="read-button"
 										type="button"
 										@click="readLatestChapterAndOptions"
 									>
-										{{ isReadingAloud ? 'Stop reading' : 'Read to me' }}
+										<span
+											class="read-button__spinner"
+											:class="{
+												'read-button__spinner--visible': isReadLoading,
+											}"
+										></span>
+										<span class="read-button__label">{{
+											isReadingAloud ? 'Stop reading' : 'Read to me'
+										}}</span>
 									</button>
 								</div>
 								<div class="story-entry__text">
@@ -195,8 +202,12 @@ const errorMessage = ref('');
 const isRestoring = ref(false);
 const storyFeedRef = ref<HTMLElement | null>(null);
 const isStoryPanelFocused = ref(false);
-const isSpeechSupported = ref(false);
 const isReadingAloud = ref(false);
+const isReadLoading = ref(false);
+let activeStoryAudio: HTMLAudioElement | null = null;
+let activeStoryAudioUrl = '';
+let activeReadSessionId = 0;
+let activeReadAbortController: AbortController | null = null;
 
 const panelTitle = computed(() => {
 	if (story.value?.genre) {
@@ -226,35 +237,6 @@ const latestNarrationIndex = computed(() => {
 
 	return -1;
 });
-
-function pickPreferredFemaleVoice(voices: SpeechSynthesisVoice[]) {
-	if (!voices.length) {
-		return null;
-	}
-
-	const femaleHints = [
-		'female',
-		'woman',
-		'samantha',
-		'victoria',
-		'karen',
-		'moira',
-		'zira',
-		'susan',
-		'hazel',
-		'aria',
-		'jenny',
-		'libby',
-		'sonia',
-	];
-
-	const preferred = voices.find((voice) => {
-		const voiceName = `${voice.name} ${voice.voiceURI}`.toLowerCase();
-		return femaleHints.some((hint) => voiceName.includes(hint));
-	});
-
-	return preferred ?? null;
-}
 
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
 	const url = new URL(path, window.location.origin);
@@ -313,9 +295,6 @@ onMounted(async () => {
 	const storedStoryId = window.localStorage.getItem(
 		'neverending-stories-story-id',
 	);
-	isSpeechSupported.value =
-		typeof window.speechSynthesis !== 'undefined' &&
-		typeof window.SpeechSynthesisUtterance !== 'undefined';
 	const storedTranscript = window.localStorage.getItem(
 		'neverending-stories-transcript',
 	);
@@ -348,6 +327,7 @@ onMounted(async () => {
 });
 
 async function beginStory(genre: string) {
+	stopAudioPlayback();
 	selectedGenre.value = genre;
 	isStoryPanelFocused.value = true;
 	isLoading.value = true;
@@ -391,6 +371,7 @@ async function chooseOption(option: string) {
 		return;
 	}
 
+	stopAudioPlayback();
 	isLoading.value = true;
 	errorMessage.value = '';
 	transcript.value = [...transcript.value, { kind: 'choice', text: option }];
@@ -429,6 +410,7 @@ async function chooseOption(option: string) {
 }
 
 function resetStory() {
+	stopAudioPlayback();
 	story.value = null;
 	selectedGenre.value = '';
 	errorMessage.value = '';
@@ -472,13 +454,12 @@ function parseTranscript(serialized: string | null) {
 }
 
 function readLatestChapterAndOptions() {
-	if (!isSpeechSupported.value || typeof window === 'undefined') {
+	if (typeof window === 'undefined') {
 		return;
 	}
 
 	if (isReadingAloud.value) {
-		window.speechSynthesis.cancel();
-		isReadingAloud.value = false;
+		stopAudioPlayback();
 		return;
 	}
 
@@ -490,38 +471,206 @@ function readLatestChapterAndOptions() {
 
 	const chapterText = narrationEntry.text.trim();
 	const options = story.value?.options ?? [];
-	const optionsText = options.length
-		? options.map((option, index) => `Option ${index + 1}: ${option}`).join(' ')
-		: 'No options are currently available.';
-	const speechText = `${chapterText} What do you want to do now? ${optionsText}`;
-	const utterance = new window.SpeechSynthesisUtterance(speechText);
-	const preferredVoice = pickPreferredFemaleVoice(
-		window.speechSynthesis.getVoices(),
-	);
+	const speechSegments = buildSpeechSegments(chapterText, options);
 
-	if (preferredVoice) {
-		utterance.voice = preferredVoice;
-	}
-	utterance.onend = () => {
-		isReadingAloud.value = false;
-	};
-	utterance.onerror = () => {
-		isReadingAloud.value = false;
-	};
-
-	window.speechSynthesis.cancel();
-	isReadingAloud.value = true;
-	window.speechSynthesis.speak(utterance);
-}
-
-onBeforeUnmount(() => {
-	if (typeof window === 'undefined' || !isSpeechSupported.value) {
+	if (!speechSegments.length) {
 		return;
 	}
 
-	window.speechSynthesis.cancel();
-	isReadingAloud.value = false;
+	errorMessage.value = '';
+	const sessionId = ++activeReadSessionId;
+	activeReadAbortController = new AbortController();
+	isReadingAloud.value = true;
+	isReadLoading.value = true;
+
+	void playStoryAudioSegments(speechSegments, sessionId);
+}
+
+onBeforeUnmount(() => {
+	if (typeof window === 'undefined') {
+		return;
+	}
+
+	stopAudioPlayback();
 });
+
+function buildSpeechSegments(chapterText: string, options: string[]) {
+	const chapterSentences = splitIntoSentences(chapterText);
+	const segments = [...chapterSentences, 'What do you want to do now?'];
+
+	if (options.length) {
+		for (let index = 0; index < options.length; index += 1) {
+			segments.push(`Option ${index + 1}. ${options[index]}`);
+		}
+	} else {
+		segments.push('No options are currently available.');
+	}
+
+	return segments;
+}
+
+function splitIntoSentences(text: string) {
+	const normalized = text.replace(/\s+/g, ' ').trim();
+
+	if (!normalized) {
+		return [];
+	}
+
+	return normalized
+		.split(/(?<=[.!?])\s+/)
+		.map((sentence) => sentence.trim())
+		.filter(Boolean);
+}
+
+async function playStoryAudioSegments(segments: string[], sessionId: number) {
+	const prefetchedAudio = segments.map((segment) =>
+		requestStoryAudio(segment, sessionId)
+			.then((audioBlob) => ({ ok: true as const, audioBlob }))
+			.catch((error: unknown) => ({ ok: false as const, error })),
+	);
+
+	for (const audioResultPromise of prefetchedAudio) {
+		if (!isReadSessionActive(sessionId)) {
+			return;
+		}
+
+		try {
+			const audioResult = await audioResultPromise;
+
+			if (!audioResult.ok) {
+				throw audioResult.error;
+			}
+
+			if (!isReadSessionActive(sessionId)) {
+				return;
+			}
+
+			await playAudioBlob(audioResult.audioBlob, sessionId);
+		} catch (error) {
+			if (!isReadSessionActive(sessionId)) {
+				return;
+			}
+
+			stopAudioPlayback();
+			errorMessage.value =
+				error instanceof Error
+					? error.message
+					: 'Unable to read this chapter aloud.';
+			return;
+		}
+	}
+
+	if (isReadSessionActive(sessionId)) {
+		cleanupActiveAudio();
+		isReadingAloud.value = false;
+		isReadLoading.value = false;
+		activeReadAbortController = null;
+	}
+}
+
+async function requestStoryAudio(text: string, sessionId: number) {
+	const response = await fetch('/api/story/tts', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ text }),
+		signal: activeReadAbortController?.signal,
+	});
+
+	if (!response.ok) {
+		let message = `Unable to generate speech (status ${response.status}).`;
+
+		try {
+			const payload = (await response.json()) as { message?: string };
+			message = payload.message ?? message;
+		} catch {
+			// Keep the status-based message.
+		}
+
+		throw new Error(message);
+	}
+
+	const audioBlob = await response.blob();
+
+	if (!audioBlob.size) {
+		throw new Error('Speech service returned empty audio.');
+	}
+
+	if (!isReadSessionActive(sessionId)) {
+		throw new Error('Reading was cancelled.');
+	}
+
+	return audioBlob;
+}
+
+function playAudioBlob(audioBlob: Blob, sessionId: number) {
+	cleanupActiveAudio();
+	activeStoryAudioUrl = window.URL.createObjectURL(audioBlob);
+	const audio = new window.Audio(activeStoryAudioUrl);
+	activeStoryAudio = audio;
+
+	return new Promise<void>((resolve, reject) => {
+		audio.onended = () => {
+			cleanupActiveAudio();
+			resolve();
+		};
+		audio.onerror = () => {
+			cleanupActiveAudio();
+			reject(new Error('Audio playback failed.'));
+		};
+
+		void audio
+			.play()
+			.then(() => {
+				if (isReadSessionActive(sessionId)) {
+					isReadLoading.value = false;
+				}
+
+				if (!isReadSessionActive(sessionId)) {
+					audio.pause();
+					cleanupActiveAudio();
+					resolve();
+				}
+			})
+			.catch((error) => {
+				cleanupActiveAudio();
+				reject(
+					error instanceof Error ? error : new Error('Audio playback failed.'),
+				);
+			});
+	});
+}
+
+function isReadSessionActive(sessionId: number) {
+	return isReadingAloud.value && sessionId === activeReadSessionId;
+}
+
+function cleanupActiveAudio() {
+	if (activeStoryAudio) {
+		activeStoryAudio.pause();
+		activeStoryAudio.currentTime = 0;
+		activeStoryAudio.onended = null;
+		activeStoryAudio.onerror = null;
+		activeStoryAudio = null;
+	}
+
+	if (activeStoryAudioUrl) {
+		window.URL.revokeObjectURL(activeStoryAudioUrl);
+		activeStoryAudioUrl = '';
+	}
+}
+
+function stopAudioPlayback() {
+	activeReadSessionId += 1;
+	if (activeReadAbortController) {
+		activeReadAbortController.abort();
+		activeReadAbortController = null;
+	}
+	cleanupActiveAudio();
+	isReadingAloud.value = false;
+	isReadLoading.value = false;
+}
 
 function scrollStoryFeedToBottom() {
 	const element = storyFeedRef.value;
@@ -766,6 +915,10 @@ h1 {
 	color: var(--accent-strong);
 	border-radius: 999px;
 	padding: 0.32rem 0.7rem;
+	min-width: 8.5rem;
+	position: relative;
+	display: inline-grid;
+	place-items: center;
 	font-size: 0.72rem;
 	letter-spacing: 0.03em;
 	cursor: pointer;
@@ -779,6 +932,26 @@ h1 {
 	background: rgba(243, 201, 105, 0.16);
 	border-color: rgba(243, 201, 105, 0.48);
 	transform: translateY(-1px);
+}
+
+.read-button__spinner {
+	position: absolute;
+	left: 0.7rem;
+	width: 0.72rem;
+	height: 0.72rem;
+	border-radius: 50%;
+	border: 2px solid rgba(243, 201, 105, 0.2);
+	border-top-color: var(--accent-strong);
+	animation: spin 900ms linear infinite;
+	opacity: 0;
+}
+
+.read-button__spinner--visible {
+	opacity: 1;
+}
+
+.read-button__label {
+	text-align: center;
 }
 
 .story-entry__text {

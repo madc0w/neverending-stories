@@ -20,6 +20,8 @@ export default defineNuxtConfig({
 		mongoDbName: process.env.MONGODB_DB ?? 'neverending-stories',
 		openaiApiKey: process.env.OPENAI_API_KEY ?? '',
 		openaiModel: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+		openaiTtsModel: process.env.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
+		openaiTtsVoice: process.env.OPENAI_TTS_VOICE ?? 'shimmer',
 		public: {},
 	},
 });
