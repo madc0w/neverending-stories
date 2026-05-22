@@ -48,7 +48,7 @@
 					</button>
 				</div>
 
-				<div v-if="loading && !story" class="status-card">
+				<div v-if="isLoading && !story" class="status-card">
 					<div class="spinner"></div>
 					<p>{{ loadingLabel }}</p>
 				</div>
@@ -100,7 +100,7 @@
 								/>
 							</div>
 
-							<div v-if="loading" class="status-card story-status-inline">
+							<div v-if="isLoading" class="status-card story-status-inline">
 								<div class="spinner"></div>
 								<p>{{ loadingLabel }}</p>
 							</div>
@@ -167,9 +167,9 @@ const genres: GenreItem[] = [
 const selectedGenre = ref('');
 const story = ref<StoryState | null>(null);
 const transcript = ref<TranscriptEntry[]>([]);
-const loading = ref(false);
+const isLoading = ref(false);
 const errorMessage = ref('');
-const restoring = ref(false);
+const isRestoring = ref(false);
 const storyFeedRef = ref<HTMLElement | null>(null);
 
 const panelTitle = computed(
@@ -210,7 +210,7 @@ onMounted(async () => {
 		return;
 	}
 
-	restoring.value = true;
+	isRestoring.value = true;
 
 	try {
 		const restored = await $fetch<StoryState>('/api/story/state', {
@@ -228,13 +228,28 @@ onMounted(async () => {
 		window.localStorage.removeItem('neverending-stories-story-id');
 		window.localStorage.removeItem('neverending-stories-transcript');
 	} finally {
-		restoring.value = false;
+		isRestoring.value = false;
 	}
 });
 
+watch(
+	() => [
+		story.value?.storyId ?? '',
+		transcript.value.length,
+		story.value?.options.length ?? 0,
+		story.value?.ended ?? false,
+		isLoading.value,
+	],
+	async () => {
+		await nextTick();
+		scrollStoryFeedToBottom();
+	},
+	{ flush: 'post' },
+);
+
 async function beginStory(genre: string) {
 	selectedGenre.value = genre;
-	loading.value = true;
+	isLoading.value = true;
 	errorMessage.value = '';
 
 	try {
@@ -265,7 +280,7 @@ async function beginStory(genre: string) {
 				? error.message
 				: 'Unable to start the story right now.';
 	} finally {
-		loading.value = false;
+		isLoading.value = false;
 	}
 }
 
@@ -274,7 +289,7 @@ async function chooseOption(option: string) {
 		return;
 	}
 
-	loading.value = true;
+	isLoading.value = true;
 	errorMessage.value = '';
 	transcript.value = [...transcript.value, { kind: 'choice', text: option }];
 	await nextTick();
@@ -310,7 +325,7 @@ async function chooseOption(option: string) {
 				? error.message
 				: 'Unable to continue the story right now.';
 	} finally {
-		loading.value = false;
+		isLoading.value = false;
 	}
 }
 
@@ -483,17 +498,20 @@ h1 {
 	min-height: 620px;
 	display: flex;
 	flex-direction: column;
-	min-height: 620px;
+	max-height: min(78dvh, 860px);
+	overflow: hidden;
 }
 
 .story-feed {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overflow-x: hidden;
 	display: grid;
 	gap: 1rem;
 	padding-right: 0.3rem;
 	scroll-behavior: smooth;
+	overscroll-behavior: contain;
 }
 
 .ghost-button {

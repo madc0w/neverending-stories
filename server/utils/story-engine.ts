@@ -164,6 +164,55 @@ function ensurePageLength(text: string) {
 	return wordCount(text) >= 260;
 }
 
+function getFallbackOptions(input: StoryGenerationInput) {
+	const key = normalizeGenreKey(input.genre);
+	const optionPools: Record<string, string[]> = {
+		fantasy: [
+			'Follow the candlelit procession into the ruined chapel crypt.',
+			'Question the masked courier before the moonbridge collapses behind him.',
+			'Pocket the rune coin and test it against the sealed iron door.',
+			'Climb the watchtower and signal the griffin riders with mirror-fire.',
+		],
+		mystery: [
+			'Dust the brass key for prints before anyone touches the desk.',
+			'Tail the limping witness through the tram tunnel without being seen.',
+			'Call the morgue and demand the unredacted autopsy photos tonight.',
+			'Break into the landlord office and copy the tenant ledger.',
+		],
+		horror: [
+			'Pry open the warped attic hatch before the scratching stops again.',
+			'Nail salt lines across every doorway and wait in the kitchen.',
+			'Follow the wet footprints into the basement boiler room now.',
+			'Turn on every radio in the house to drown out the whispering.',
+		],
+		scifi: [
+			'Override docking protocol and force a manual clamp to Bay 9.',
+			'Cut power to Deck C and hunt the ghost signal source.',
+			'Wake the cryo-engineer and show her the corrupted star map.',
+			'Eject the relay drone and piggyback its camera through the hull breach.',
+		],
+		adventure: [
+			'Race the rival crew to the basalt arch before high tide.',
+			'Trade your last flare for the smuggler route through the gorge.',
+			'Lower yourself into the sinkhole and map the carved tunnel walls.',
+			'Use the broken sextant to line up the hidden canyon pass.',
+		],
+	};
+
+	const fallbackPool = [
+		'Follow the freshest clue before the trail goes cold.',
+		'Confront the nearest suspect and force a direct answer.',
+		'Inspect the strange device and trigger it on purpose.',
+		'Slip away quietly and gather proof before anyone notices.',
+	];
+
+	const pool = optionPools[key] ?? fallbackPool;
+	const startIndex = input.turnCount % pool.length;
+	const rotated = [...pool.slice(startIndex), ...pool.slice(0, startIndex)];
+
+	return rotated.slice(0, 2 + (input.turnCount % 2));
+}
+
 function buildPrompt(input: StoryGenerationInput) {
 	const previousTurns = input.history
 		.slice(-4)
@@ -182,7 +231,7 @@ function buildPrompt(input: StoryGenerationInput) {
 	const mustEndNow = input.turnCount >= 6;
 
 	return [
-		'You write for Neverending Stories, an interactive choose-your-own-adventure app.',
+		'Write immersive second-person fiction as if events are happening now.',
 		`Genre: ${input.genre}`,
 		`Current turn: ${input.turnCount + 1}`,
 		input.choice
@@ -191,11 +240,17 @@ function buildPrompt(input: StoryGenerationInput) {
 		previousTurns
 			? `Recent story context:\n${previousTurns}`
 			: 'No prior story context exists.',
-		'Write in second person, vivid, and immersive, with the detail level of about one page of prose.',
-		'Use 3 to 5 paragraphs and aim for roughly 300 to 450 words for the main story text.',
-		'Avoid summary-style writing; instead, show the scene unfolding in real time with sensory details, emotional stakes, and a clear narrative beat.',
+		'Do not mention writing, stories, narratives, scenes, genres, prompts, choices, or options.',
+		'Do not use self-referential lines like "the story begins" or "a choice appears."',
+		'Start with a concrete physical moment, not setup commentary.',
+		'Use 3 to 5 paragraphs and aim for roughly 300 to 450 words for the main text.',
+		'Show events in motion with sensory detail, specific objects, and immediate stakes.',
+		'Every paragraph should advance the situation; avoid filler and repeated phrasing.',
 		'Return only JSON with the exact shape {"text":"...","options":["...","...","..."]}.',
-		'The options array may contain 2 or 3 short, distinct choices.',
+		'The options array must contain 2 or 3 distinct actions unless ending now.',
+		'Each option must be specific, concrete, and materially different in approach.',
+		'Avoid generic option language such as "press deeper," "inspect," "riskier path," or "hidden meaning."',
+		'Each option should reference at least one tangible noun from the current moment.',
 		'Do not wrap the response in markdown or add extra keys.',
 		mustEndNow
 			? 'This branch must end now with a satisfying conclusion. Return an empty options array.'
@@ -281,18 +336,18 @@ function fallbackFragment(input: StoryGenerationInput): StoryFragment {
 
 	const key = normalizeGenreKey(input.genre);
 	const genre = vibeMap[key] ?? {
-		setup: `You step into a new ${input.genre.toLowerCase()} story and the world waits to be defined.`,
+		setup: `Rain needles your coat as the alley gate clicks shut behind you.`,
 		beats: [
-			'A choice is already asking for you.',
-			'Something out of frame wants to become part of the tale.',
+			'Footsteps above you pause, then begin descending the metal stairs.',
+			'A red status light starts blinking from inside a cracked service panel.',
 		],
 		details: [
-			'The world sharpens around your presence, as though the scene is taking a breath before it decides what kind of story this will become.',
-			'Every small object nearby seems to carry a hidden implication, inviting you to read meaning into the silence between the obvious clues.',
+			'Water drips from a bent fire escape onto a stack of shipping crates stamped with three different company seals. One crate is warm to the touch, and the wood around its latch is splintered from the inside out.',
+			'A vending machine hums in the dark with no power line attached. Behind its glass, every row is empty except one: a paper cup marked with your initials in black marker.',
 		],
 		endings: [
-			'The story settles into a final, lingering image.',
-			'The road ahead disappears into legend.',
+			'When the noise finally dies, you are the only one still standing by the gate.',
+			'By dawn, the district map has one less street and one new warning painted in white.',
 		],
 	};
 	const details = genre.details ?? genre.beats;
@@ -305,33 +360,25 @@ function fallbackFragment(input: StoryGenerationInput): StoryFragment {
 	}
 
 	const opener = input.choice
-		? `Because you chose to ${input.choice.toLowerCase()}, the tale bends in a new direction.`
+		? `You commit to ${input.choice.toLowerCase()}, and the consequences hit fast.`
 		: genre.setup;
 	const body = [
 		opener,
 		details[input.turnCount % details.length],
 		genre.beats[input.turnCount % genre.beats.length],
-		`The path ahead stays uncertain, but the pressure of the moment is now impossible to ignore. ${input.choice ? `Your last choice still echoes through the scene, changing what the world is willing to reveal.` : 'The world is waiting for you to commit, and every detail now seems sharpened around that demand.'}`,
+		`Time tightens around you as alarms rise and nearby faces start choosing sides. ${input.choice ? 'Your last move has already changed what people are willing to risk for you.' : 'If you hesitate now, someone else decides what happens next.'}`,
 	].join('\n\n');
 
 	if (!ensurePageLength(body)) {
 		return {
 			text: `${body}\n\n${details[(input.turnCount + 1) % details.length]}`,
-			options: [
-				`Press deeper into the mystery of ${input.genre.toLowerCase()}`,
-				'Take the riskier path and trust the unexpected voice',
-				'Pause and inspect the scene for hidden meaning',
-			].slice(0, 2 + (input.turnCount % 2)),
+			options: getFallbackOptions(input),
 		};
 	}
 
 	return {
 		text: body,
-		options: [
-			`Press deeper into the mystery of ${input.genre.toLowerCase()}`,
-			`Take the riskier path and trust the unexpected voice`,
-			`Pause and inspect the scene for hidden meaning`,
-		].slice(0, 2 + (input.turnCount % 2)),
+		options: getFallbackOptions(input),
 	};
 }
 
@@ -354,7 +401,8 @@ export async function generateStoryFragment(
 			messages: [
 				{
 					role: 'system',
-					content: 'You generate branching fiction in JSON only.',
+					content:
+						'You generate branching fiction in JSON only. Never use meta writing language. Avoid repeated templates and produce concrete, materially different options.',
 				},
 				{ role: 'user', content: buildPrompt(input) },
 			],
