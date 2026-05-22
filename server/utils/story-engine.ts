@@ -109,7 +109,7 @@ function normalizeStory(story: StoryRecord | null | undefined) {
 	return {
 		...story,
 		history: Array.isArray(story.history) ? story.history : [],
-		options: Array.isArray(story.options) ? story.options : [],
+		options: cleanOptions(story.options),
 	};
 }
 
@@ -129,13 +129,39 @@ function getOpenAiClient() {
 	return openAiClient;
 }
 
+function isInvalidOption(option: string) {
+	const normalized = option.toLowerCase().replace(/\s+/g, ' ').trim();
+
+	if (!normalized) {
+		return true;
+	}
+
+	if (
+		normalized === 'placeholder' ||
+		normalized === 'option' ||
+		normalized === 'choice' ||
+		normalized === 'tbd' ||
+		normalized === 'coming soon'
+	) {
+		return true;
+	}
+
+	return (
+		/^option\s*\d+$/i.test(normalized) || /^choice\s*\d+$/i.test(normalized)
+	);
+}
+
 function cleanOptions(options: unknown) {
 	if (!Array.isArray(options)) {
 		return [];
 	}
 
 	return [
-		...new Set(options.map((option) => String(option).trim()).filter(Boolean)),
+		...new Set(
+			options
+				.map((option) => String(option).trim())
+				.filter((option) => !isInvalidOption(option)),
+		),
 	].slice(0, 3);
 }
 
@@ -186,10 +212,21 @@ function buildPrompt(input: StoryGenerationInput) {
 		'Start with a concrete physical moment, not setup commentary.',
 		'Use 3 to 5 paragraphs and aim for roughly 300 to 450 words for the main text.',
 		'Show events in motion with sensory detail, specific objects, and immediate stakes.',
-		'Every paragraph should advance the situation; avoid filler and repeated phrasing.',
+		'Prioritize clarity over density: fewer details with stronger follow-through.',
+		'Every paragraph should advance the situation through cause and effect; avoid filler and repeated phrasing.',
+		'Keep one dominant threat or objective per turn and make it explicit in the first paragraph.',
+		'Limit active introduced elements: at most 3 important objects or anomalies in this turn.',
+		'Only introduce a new object/anomaly if it changes what the protagonist can do right now.',
+		'Any introduced object/anomaly must either be used, escalate, or be explicitly deferred by the end of the turn.',
+		'Escalation must be connected: each new beat should be a consequence of the previous beat, not a random add-on.',
+		'End each paragraph with either a new constraint, a choice pressure, or a concrete consequence.',
+		'Maintain strict temporal and spatial continuity inside the turn unless a transition is clearly signaled.',
+		'Do not stack multiple unrelated shocks in one paragraph.',
 		'Return only JSON with the exact shape {"text":"...","options":["...","...","..."]}.',
 		'The options array must contain 2 or 3 distinct actions unless ending now.',
 		'Each option must be specific, concrete, and materially different in approach.',
+		'Each option must resolve or exploit a concrete element already established in the text.',
+		'Options should reflect meaningful tradeoffs (speed vs safety, stealth vs force, rescue vs evidence, etc.).',
 		'Avoid generic option language such as "press deeper," "inspect," "riskier path," or "hidden meaning."',
 		'Each option should reference at least one tangible noun from the current moment.',
 		'Do not wrap the response in markdown or add extra keys.',
@@ -227,7 +264,7 @@ export async function generateStoryFragment(
 					{
 						role: 'system',
 						content:
-							'You generate branching fiction in JSON only. Never use meta writing language. Avoid repeated templates and produce concrete, materially different options.',
+							'You generate branching fiction in JSON only. Never use meta writing language. Keep scenes causally coherent, limit unnecessary new elements, and ensure introduced details are paid off, escalated, or explicitly deferred. Avoid repeated templates and produce concrete, materially different options with clear tradeoffs.',
 					},
 					{ role: 'user', content: buildPrompt(input) },
 				],

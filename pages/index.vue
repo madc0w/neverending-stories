@@ -336,6 +336,8 @@ async function chooseOption(option: string) {
 	isLoading.value = true;
 	errorMessage.value = '';
 	transcript.value = [...transcript.value, { kind: 'choice', text: option }];
+	await nextTick();
+	scrollStoryFeedToBottom();
 
 	try {
 		const response = await apiFetch<StoryState>('/api/story/continue', {
