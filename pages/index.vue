@@ -27,11 +27,11 @@
 						@select="beginStory(genre.label)"
 					/>
 				</div>
-
+				<!-- 
 				<p class="hint">
 					Select a genre to generate the opening scene. After that, each option
 					becomes the next prompt.
-				</p>
+				</p> -->
 			</aside>
 
 			<section class="story-panel">
