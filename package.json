@@ -1,0 +1,20 @@
+{
+	"name": "neverending-stories",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "nuxt dev",
+		"build": "nuxt build",
+		"preview": "nuxt preview",
+		"postinstall": "nuxt prepare"
+	},
+	"dependencies": {
+		"mongodb": "^6.18.0",
+		"nuxt": "^3.17.0",
+		"openai": "^4.104.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"typescript": "^5.9.2"
+	}
+}
