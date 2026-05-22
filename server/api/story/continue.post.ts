@@ -22,13 +22,13 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 404, statusMessage: 'Story not found.' });
 	}
 
-	if (story.ended) {
+	if (story.isEnded) {
 		return {
 			storyId: story.id,
 			genre: story.genre,
 			text: story.text,
 			options: story.options,
-			ended: true,
+			isEnded: true,
 		};
 	}
 
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
 		turnCount: story.turnCount + 1,
 		text: fragment.text,
 		options: fragment.options,
-		ended: fragment.options.length === 0,
+		isEnded: fragment.options.length === 0,
 		history: [
 			...story.history,
 			{ text: fragment.text, options: fragment.options, choice },
@@ -56,6 +56,6 @@ export default defineEventHandler(async (event) => {
 		genre: updatedStory.genre,
 		text: updatedStory.text,
 		options: updatedStory.options,
-		ended: updatedStory.ended,
+		isEnded: updatedStory.isEnded,
 	};
 });

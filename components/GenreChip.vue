@@ -1,7 +1,7 @@
 <template>
 	<button
 		class="genre-chip"
-		:class="{ active: active }"
+		:class="{ active: isActive }"
 		type="button"
 		@click="$emit('select')"
 	>
@@ -14,7 +14,7 @@
 defineProps<{
 	label: string;
 	description: string;
-	active?: boolean;
+	isActive?: boolean;
 }>();
 
 defineEmits<{

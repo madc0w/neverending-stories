@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 		turnCount: 1,
 		text: fragment.text,
 		options: fragment.options,
-		ended: fragment.options.length === 0,
+		isEnded: fragment.options.length === 0,
 		history: [{ text: fragment.text, options: fragment.options }],
 		createdAt: now,
 		updatedAt: now,
@@ -42,6 +42,6 @@ export default defineEventHandler(async (event) => {
 		genre: saved.genre,
 		text: saved.text,
 		options: saved.options,
-		ended: saved.ended,
+		isEnded: saved.isEnded,
 	};
 });

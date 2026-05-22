@@ -16,7 +16,8 @@
 	"dependencies": {
 		"mongodb": "^6.18.0",
 		"nuxt": "^3.17.0",
-		"openai": "^4.104.0"
+		"openai": "^4.104.0",
+		"unstorage": "^1.17.5"
 	},
 	"devDependencies": {
 		"@types/node": "^24.3.0",

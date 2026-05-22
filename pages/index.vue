@@ -7,7 +7,10 @@
 			</div>
 		</section>
 
-		<section class="story-grid">
+		<section
+			class="story-grid"
+			:class="{ 'story-grid--story-focused': isStoryPanelFocused }"
+		>
 			<aside class="genre-panel">
 				<div class="panel-header">
 					<p class="panel-label">Genres</p>
@@ -20,7 +23,7 @@
 						:key="genre.label"
 						:label="genre.label"
 						:description="genre.description"
-						:active="selectedGenre === genre.label"
+						:is-active="selectedGenre === genre.label"
 						@select="beginStory(genre.label)"
 					/>
 				</div>
@@ -82,7 +85,7 @@
 								</div>
 							</div>
 
-							<div v-if="story.ended" class="ending-card">
+							<div v-if="story.isEnded" class="ending-card">
 								<strong>The story has ended.</strong>
 								<p>
 									This branch resolved cleanly. Start a new genre to generate
@@ -123,7 +126,7 @@ interface StoryState {
 	genre: string;
 	text: string;
 	options: string[];
-	ended: boolean;
+	isEnded: boolean;
 }
 
 interface TranscriptEntry {
@@ -134,6 +137,12 @@ interface TranscriptEntry {
 interface GenreItem {
 	label: string;
 	description: string;
+}
+
+interface ApiFetchOptions {
+	method?: string;
+	body?: unknown;
+	query?: Record<string, string>;
 }
 
 const genres: GenreItem[] = [
@@ -171,10 +180,19 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const isRestoring = ref(false);
 const storyFeedRef = ref<HTMLElement | null>(null);
+const isStoryPanelFocused = ref(false);
 
-const panelTitle = computed(
-	() => story.value?.genre ?? 'Waiting for your first genre',
-);
+const panelTitle = computed(() => {
+	if (story.value?.genre) {
+		return story.value.genre;
+	}
+
+	if (selectedGenre.value) {
+		return selectedGenre.value;
+	}
+
+	return 'Waiting for your first genre';
+});
 const loadingLabel = computed(() => {
 	if (!story.value) {
 		return 'Conjuring a new opening scene...';
@@ -182,6 +200,44 @@ const loadingLabel = computed(() => {
 
 	return 'Writing the next chapter...';
 });
+
+async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
+	const url = new URL(path, window.location.origin);
+
+	if (options.query) {
+		for (const [key, value] of Object.entries(options.query)) {
+			url.searchParams.set(key, value);
+		}
+	}
+
+	const response = await fetch(url.toString(), {
+		method: options.method ?? 'GET',
+		headers: options.body
+			? {
+					'Content-Type': 'application/json',
+				}
+			: undefined,
+		body: options.body ? JSON.stringify(options.body) : undefined,
+	});
+
+	if (!response.ok) {
+		let message = `Request failed with status ${response.status}`;
+
+		try {
+			const payload = (await response.json()) as {
+				message?: string;
+				statusMessage?: string;
+			};
+			message = payload.statusMessage ?? payload.message ?? message;
+		} catch {
+			// Keep the generic status-based error when the payload is not JSON.
+		}
+
+		throw new Error(message);
+	}
+
+	return (await response.json()) as T;
+}
 
 useHead({
 	title: 'Neverending Stories',
@@ -195,7 +251,7 @@ useHead({
 });
 
 onMounted(async () => {
-	if (!process.client) {
+	if (typeof window === 'undefined') {
 		return;
 	}
 
@@ -213,12 +269,13 @@ onMounted(async () => {
 	isRestoring.value = true;
 
 	try {
-		const restored = await $fetch<StoryState>('/api/story/state', {
+		const restored = await apiFetch<StoryState>('/api/story/state', {
 			query: { storyId: storedStoryId },
 		});
 
 		story.value = restored;
 		selectedGenre.value = restored.genre;
+		isStoryPanelFocused.value = true;
 		transcript.value = parseTranscript(storedTranscript) ?? [
 			{ kind: 'narration', text: restored.text },
 		];
@@ -237,7 +294,7 @@ watch(
 		story.value?.storyId ?? '',
 		transcript.value.length,
 		story.value?.options.length ?? 0,
-		story.value?.ended ?? false,
+		story.value?.isEnded ?? false,
 		isLoading.value,
 	],
 	async () => {
@@ -249,11 +306,12 @@ watch(
 
 async function beginStory(genre: string) {
 	selectedGenre.value = genre;
+	isStoryPanelFocused.value = true;
 	isLoading.value = true;
 	errorMessage.value = '';
 
 	try {
-		const response = await $fetch<StoryState>('/api/story/start', {
+		const response = await apiFetch<StoryState>('/api/story/start', {
 			method: 'POST',
 			body: { genre },
 		});
@@ -261,7 +319,7 @@ async function beginStory(genre: string) {
 		story.value = response;
 		transcript.value = [{ kind: 'narration', text: response.text }];
 
-		if (process.client) {
+		if (typeof window !== 'undefined') {
 			window.localStorage.setItem(
 				'neverending-stories-story-id',
 				response.storyId,
@@ -279,6 +337,7 @@ async function beginStory(genre: string) {
 			error instanceof Error
 				? error.message
 				: 'Unable to start the story right now.';
+		isStoryPanelFocused.value = false;
 	} finally {
 		isLoading.value = false;
 	}
@@ -296,7 +355,7 @@ async function chooseOption(option: string) {
 	scrollStoryFeedToBottom();
 
 	try {
-		const response = await $fetch<StoryState>('/api/story/continue', {
+		const response = await apiFetch<StoryState>('/api/story/continue', {
 			method: 'POST',
 			body: {
 				storyId: story.value.storyId,
@@ -310,7 +369,7 @@ async function chooseOption(option: string) {
 			{ kind: 'narration', text: response.text },
 		];
 
-		if (process.client) {
+		if (typeof window !== 'undefined') {
 			window.localStorage.setItem(
 				'neverending-stories-transcript',
 				JSON.stringify(transcript.value),
@@ -334,8 +393,9 @@ function resetStory() {
 	selectedGenre.value = '';
 	errorMessage.value = '';
 	transcript.value = [];
+	isStoryPanelFocused.value = false;
 
-	if (process.client) {
+	if (typeof window !== 'undefined') {
 		window.localStorage.removeItem('neverending-stories-story-id');
 		window.localStorage.removeItem('neverending-stories-transcript');
 	}
@@ -457,6 +517,14 @@ h1 {
 
 .story-grid {
 	grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+}
+
+.story-grid--story-focused {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.story-grid--story-focused .genre-panel {
+	display: none;
 }
 
 .genre-panel,

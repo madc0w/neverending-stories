@@ -21,6 +21,6 @@ export default defineEventHandler(async (event) => {
 		genre: story.genre,
 		text: story.text,
 		options: story.options,
-		ended: story.ended,
+		isEnded: story.isEnded,
 	};
 });
