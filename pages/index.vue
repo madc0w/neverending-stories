@@ -289,21 +289,6 @@ onMounted(async () => {
 	}
 });
 
-watch(
-	() => [
-		story.value?.storyId ?? '',
-		transcript.value.length,
-		story.value?.options.length ?? 0,
-		story.value?.isEnded ?? false,
-		isLoading.value,
-	],
-	async () => {
-		await nextTick();
-		scrollStoryFeedToBottom();
-	},
-	{ flush: 'post' },
-);
-
 async function beginStory(genre: string) {
 	selectedGenre.value = genre;
 	isStoryPanelFocused.value = true;
@@ -351,8 +336,6 @@ async function chooseOption(option: string) {
 	isLoading.value = true;
 	errorMessage.value = '';
 	transcript.value = [...transcript.value, { kind: 'choice', text: option }];
-	await nextTick();
-	scrollStoryFeedToBottom();
 
 	try {
 		const response = await apiFetch<StoryState>('/api/story/continue', {
@@ -375,9 +358,6 @@ async function chooseOption(option: string) {
 				JSON.stringify(transcript.value),
 			);
 		}
-
-		await nextTick();
-		scrollStoryFeedToBottom();
 	} catch (error) {
 		errorMessage.value =
 			error instanceof Error
