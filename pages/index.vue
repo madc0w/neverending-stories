@@ -69,9 +69,23 @@
 								class="story-entry"
 								:class="`story-entry--${entry.kind}`"
 							>
-								<p class="story-entry__label">
-									{{ entry.kind === 'choice' ? 'You chose' : 'Story' }}
-								</p>
+								<div class="story-entry__header">
+									<p class="story-entry__label">
+										{{ entry.kind === 'choice' ? 'You chose' : 'Story' }}
+									</p>
+									<button
+										v-if="
+											entry.kind === 'narration' &&
+											index === latestNarrationIndex &&
+											isSpeechSupported
+										"
+										class="read-button"
+										type="button"
+										@click="readLatestChapterAndOptions"
+									>
+										{{ isReadingAloud ? 'Stop reading' : 'Read to me' }}
+									</button>
+								</div>
 								<div class="story-entry__text">
 									<p
 										v-for="(paragraph, paragraphIndex) in splitParagraphs(
@@ -181,6 +195,8 @@ const errorMessage = ref('');
 const isRestoring = ref(false);
 const storyFeedRef = ref<HTMLElement | null>(null);
 const isStoryPanelFocused = ref(false);
+const isSpeechSupported = ref(false);
+const isReadingAloud = ref(false);
 
 const panelTitle = computed(() => {
 	if (story.value?.genre) {
@@ -199,6 +215,16 @@ const loadingLabel = computed(() => {
 	}
 
 	return 'Writing the next chapter...';
+});
+
+const latestNarrationIndex = computed(() => {
+	for (let index = transcript.value.length - 1; index >= 0; index -= 1) {
+		if (transcript.value[index]?.kind === 'narration') {
+			return index;
+		}
+	}
+
+	return -1;
 });
 
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
@@ -258,6 +284,9 @@ onMounted(async () => {
 	const storedStoryId = window.localStorage.getItem(
 		'neverending-stories-story-id',
 	);
+	isSpeechSupported.value =
+		typeof window.speechSynthesis !== 'undefined' &&
+		typeof window.SpeechSynthesisUtterance !== 'undefined';
 	const storedTranscript = window.localStorage.getItem(
 		'neverending-stories-transcript',
 	);
@@ -412,6 +441,51 @@ function parseTranscript(serialized: string | null) {
 		return null;
 	}
 }
+
+function readLatestChapterAndOptions() {
+	if (!isSpeechSupported.value || typeof window === 'undefined') {
+		return;
+	}
+
+	if (isReadingAloud.value) {
+		window.speechSynthesis.cancel();
+		isReadingAloud.value = false;
+		return;
+	}
+
+	const narrationEntry = transcript.value[latestNarrationIndex.value];
+
+	if (!narrationEntry || narrationEntry.kind !== 'narration') {
+		return;
+	}
+
+	const chapterText = narrationEntry.text.trim();
+	const options = story.value?.options ?? [];
+	const optionsText = options.length
+		? options.map((option, index) => `Option ${index + 1}: ${option}`).join(' ')
+		: 'No options are currently available.';
+	const speechText = `${chapterText} What do you want to do now? ${optionsText}`;
+	const utterance = new window.SpeechSynthesisUtterance(speechText);
+	utterance.onend = () => {
+		isReadingAloud.value = false;
+	};
+	utterance.onerror = () => {
+		isReadingAloud.value = false;
+	};
+
+	window.speechSynthesis.cancel();
+	isReadingAloud.value = true;
+	window.speechSynthesis.speak(utterance);
+}
+
+onBeforeUnmount(() => {
+	if (typeof window === 'undefined' || !isSpeechSupported.value) {
+		return;
+	}
+
+	window.speechSynthesis.cancel();
+	isReadingAloud.value = false;
+});
 
 function scrollStoryFeedToBottom() {
 	const element = storyFeedRef.value;
@@ -641,6 +715,34 @@ h1 {
 	letter-spacing: 0.22em;
 	font-size: 0.7rem;
 	color: var(--accent-strong);
+}
+
+.story-entry__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.read-button {
+	border: 1px solid rgba(243, 201, 105, 0.32);
+	background: rgba(243, 201, 105, 0.08);
+	color: var(--accent-strong);
+	border-radius: 999px;
+	padding: 0.32rem 0.7rem;
+	font-size: 0.72rem;
+	letter-spacing: 0.03em;
+	cursor: pointer;
+	transition:
+		background 180ms ease,
+		border-color 180ms ease,
+		transform 180ms ease;
+}
+
+.read-button:hover {
+	background: rgba(243, 201, 105, 0.16);
+	border-color: rgba(243, 201, 105, 0.48);
+	transform: translateY(-1px);
 }
 
 .story-entry__text {
