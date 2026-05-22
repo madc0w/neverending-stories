@@ -227,6 +227,35 @@ const latestNarrationIndex = computed(() => {
 	return -1;
 });
 
+function pickPreferredFemaleVoice(voices: SpeechSynthesisVoice[]) {
+	if (!voices.length) {
+		return null;
+	}
+
+	const femaleHints = [
+		'female',
+		'woman',
+		'samantha',
+		'victoria',
+		'karen',
+		'moira',
+		'zira',
+		'susan',
+		'hazel',
+		'aria',
+		'jenny',
+		'libby',
+		'sonia',
+	];
+
+	const preferred = voices.find((voice) => {
+		const voiceName = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+		return femaleHints.some((hint) => voiceName.includes(hint));
+	});
+
+	return preferred ?? null;
+}
+
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
 	const url = new URL(path, window.location.origin);
 
@@ -466,6 +495,13 @@ function readLatestChapterAndOptions() {
 		: 'No options are currently available.';
 	const speechText = `${chapterText} What do you want to do now? ${optionsText}`;
 	const utterance = new window.SpeechSynthesisUtterance(speechText);
+	const preferredVoice = pickPreferredFemaleVoice(
+		window.speechSynthesis.getVoices(),
+	);
+
+	if (preferredVoice) {
+		utterance.voice = preferredVoice;
+	}
 	utterance.onend = () => {
 		isReadingAloud.value = false;
 	};
