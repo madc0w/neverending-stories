@@ -195,12 +195,16 @@ function buildPrompt(input: StoryGenerationInput) {
 		})
 		.join('\n\n');
 
-	const mustEndNow = input.turnCount >= 6;
+	const isEndNow = input.turnCount >= 6;
+	const isFirstChapter = input.turnCount === 0;
 
 	return [
 		'Write immersive second-person fiction as if events are happening now.',
 		`Genre: ${input.genre}`,
 		`Current turn: ${input.turnCount + 1}`,
+		isFirstChapter
+			? "Chapter context: this is chapter one, so establish the world and the protagonist's immediate situation before escalation."
+			: 'Chapter context: this is not chapter one, so briefly re-anchor place and momentum, then continue directly from prior consequences.',
 		input.choice
 			? `The user chose: ${input.choice}`
 			: 'This is the opening scene.',
@@ -209,8 +213,17 @@ function buildPrompt(input: StoryGenerationInput) {
 			: 'No prior story context exists.',
 		'Do not mention writing, stories, narratives, scenes, genres, prompts, choices, or options.',
 		'Do not use self-referential lines like "the story begins" or "a choice appears."',
+		isFirstChapter
+			? 'Open by grounding the reader in the immediate scene and setting: where you are, what is physically present, and what condition the environment is in.'
+			: 'In the first paragraph, quickly re-establish the current location and concrete situation before introducing the next complication.',
+		isFirstChapter
+			? 'For chapter one, the first 2 to 4 sentences must establish location, spatial layout, and notable physical details before any sudden-impact action beat occurs.'
+			: 'For later chapters, use 1 to 2 orientation sentences, then move into action driven by consequences from the previous turn.',
+		isFirstChapter
+			? 'In chapter one, describe what can be seen/heard/felt in the environment before describing collisions, attacks, chases, or other abrupt threats.'
+			: 'Do not restart the narrative from scratch in later chapters; preserve continuity and advance the same unfolding situation.',
 		'Start with a concrete physical moment, not setup commentary.',
-		'Use 3 to 5 paragraphs and aim for roughly 300 to 450 words for the main text.',
+		'Use 3 or 4 paragraphs and aim for roughly 250 to 400 words for the main text.',
 		'Show events in motion with sensory detail, specific objects, and immediate stakes.',
 		'Prioritize clarity over density: fewer details with stronger follow-through.',
 		'Every paragraph should advance the situation through cause and effect; avoid filler and repeated phrasing.',
@@ -225,12 +238,13 @@ function buildPrompt(input: StoryGenerationInput) {
 		'Return only JSON with the exact shape {"text":"...","options":["...","...","..."]}.',
 		'The options array must contain 2 or 3 distinct actions unless ending now.',
 		'Each option must be specific, concrete, and materially different in approach.',
+		'Each option must launch a materially different path in the story world (different destination, alliance, objective, or risk profile), not just a stylistic variation of the same action.',
 		'Each option must resolve or exploit a concrete element already established in the text.',
 		'Options should reflect meaningful tradeoffs (speed vs safety, stealth vs force, rescue vs evidence, etc.).',
 		'Avoid generic option language such as "press deeper," "inspect," "riskier path," or "hidden meaning."',
 		'Each option should reference at least one tangible noun from the current moment.',
 		'Do not wrap the response in markdown or add extra keys.',
-		mustEndNow
+		isEndNow
 			? 'This branch must end now with a satisfying conclusion. Return an empty options array.'
 			: 'Keep the story moving toward a later conclusion and leave the scene on a branching decision.',
 	].join('\n');
